@@ -1,3 +1,5 @@
+# KubernetesとIstioを使ったマイクロサービス開発と運用のハンズオン
+
 # 事前準備
 
 ## プロジェクト名とIDのリストを取得する
@@ -21,7 +23,7 @@ gcloud config set project $GOOGLE_CLOUD_PROJECT
 ## ハンズオンで利用するディレクトリを環境変数に設定する
 
 ```bash
-export HANDSON_WORKSPACE=`pwd`
+export HANDSON_WORKSPACE=$PWD
 ```
 
 ## ハンズオンで利用するGCPのAPIを有効化する
@@ -36,8 +38,20 @@ Gitレポジトリより資材を取得し、動作確認ができている最�
 
 ```bash
 cd $HANDSON_WORKSPACE
+```
+
+Gitで資材を取得する。
+```bash
 git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
+```
+
+取得した資材が入っているディレクトリに移動する
+```bash
 cd microservices-demo/
+```
+
+動作確認ができているバージョンに切り替える
+```bash
 git reset --hard f2f382f
 ```
 
@@ -53,7 +67,7 @@ gcloud beta container clusters create "microservices-demo"  \
 --disk-type "pd-standard" \
 --disk-size "100" \
 --scopes "https://www.googleapis.com/auth/cloud-platform" \
---num-nodes "5" \
+--num-nodes "4" \
 --enable-cloud-logging --enable-cloud-monitoring \
 --enable-ip-alias \
 --network "projects/$GOOGLE_CLOUD_PROJECT/global/networks/default" \
@@ -69,18 +83,15 @@ gcloud container clusters get-credentials microservices-demo --zone asia-northea
 
 # Kubernetesでのアプリケーション開発と運用
 
-## コンテナの作成
+## コンテナの作成、Kubernetesクラスターへのデプロイ
 
 ```bash
 cd $HANDSON_WORKSPACE/microservices-demo
-skaffold run -p gcb --default-repo=gcr.io/$GOOGLE_CLOUD_PROJECT
 ```
 
-## サンプルサービス、Podの作成
-
+skaffoldを利用してコンテナのビルドとレジストリへの登録を行なう。
 ```bash
-cd $HANDSON_WORKSPACE/microservices-demo
-kubectl apply -f release/kubernetes-manifests.yaml
+skaffold run -p gcb --default-repo=gcr.io/$GOOGLE_CLOUD_PROJECT
 ```
 
 ## 動作確認
@@ -106,7 +117,7 @@ http://<EXTERNAL-IP>/product/9SIQT8TOJO
 
 対象ファイル
 ```
-$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
+$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstershop/AdService.java
 ```
 
 変更内容
@@ -119,7 +130,15 @@ $HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstarshop/Ad
 
 ```bash
 cd $HANDSON_WORKSPACE/microservices-demo/src/adservice/
+```
+
+コンテナのビルドを行なう
+```bash
 docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2 .
+```
+
+コンテナをレジストリへ登録する
+```bash
 docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2
 ```
 
@@ -133,6 +152,12 @@ kubectl set image deployment/adservice server=gcr.io/$GOOGLE_CLOUD_PROJECT/adser
 
 マニフェストファイルを修正する方法でも問題無いが、コマンドの方が簡易なので使用。
 
+### 動作確認
+
+以下にある自転車の商品ページにアクセスし、カメラの広告(Advertisement)が表示されることを確認する。
+```
+http://<EXTERNAL-IP>/product/9SIQT8TOJO
+```
 
 
 # サービスメッシュの導入
@@ -159,26 +184,34 @@ kubectl delete --all pods
 
 既にプロダクション提供している環境に対してInjectionを行う場合、Podのメタデータや環境変数など影響のないパラメータを変更することによりPodの再作成を行なう、もしくは別のDeploymentを作成することが望ましい。上記の方法は強制的にPodをすべて削除し、再度作成するという方法であるため本番環境で行なうとサービスダウンが発生する。
 
-## Istioを使ったアプリケーションのデプロイ
+## Istioを使うためのアプリケーションのデプロイ
 
 ### ソースコードを修正する
 
 対象ファイル
 ```
-$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
+$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstershop/AdService.java
 ```
 
 変更内容
 ```
-.put("cycling", bike) # 210行目　変更前
-.put("cycling", camera) # 210行目　変更後
+.put("cycling", camera) # 210行目　変更前
+.put("cycling", airPlant) # 210行目　変更後
 ```
 
 ### コンテナの作成、レジストリへの登録
 
 ```bash
 cd $HANDSON_WORKSPACE/microservices-demo/src/adservice/
+```
+
+コンテナのビルドを行なう
+```bash
 docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3 .
+```
+
+コンテナをレジストリへ登録する
+```bash
 docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3
 ```
 
@@ -187,7 +220,16 @@ docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3
 adservice v2のためのDeploymentを作成する
 ```bash
 cd $HANDSON_WORKSPACE
-cat <<EOF > k8s-adservice-v2.yaml
+```
+
+以下の内容のファイルをk8s-adservice-v2.yamlという名前で作成する。作成時FIXMEをGCPプロジェクトIDに置き換える。
+
+プロジェクトIDの確認方法
+```bash
+echo $GOOGLE_CLOUD_PROJECT
+```
+
+```
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -205,7 +247,7 @@ spec:
       terminationGracePeriodSeconds: 5
       containers:
       - name: server
-        image: gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2
+        image: gcr.io/FIXME/adservice:v2
         ports:
         - containerPort: 9555
         env:
@@ -230,23 +272,24 @@ spec:
           periodSeconds: 15
           exec:
             command: ["/bin/grpc_health_probe", "-addr=:9555"]
-EOF
 ```
 
 adservice v2のためのDeploymentをデプロイする
 ```bash
-cd $HANDSON_WORKSPACE
 kubectl apply -f k8s-adservice-v2.yaml
 ```
 
 adservice v3のためのDeploymentを作成する
 ```bash
 cd $HANDSON_WORKSPACE
-cat <<EOF > k8s-adservice-v3.yaml
+```
+
+以下の内容のファイルをk8s-adservice-v3.yamlという名前で作成する。
+```
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: adservice
+  name: adservice-v3
 spec:
   selector:
     matchLabels:
@@ -260,7 +303,7 @@ spec:
       terminationGracePeriodSeconds: 5
       containers:
       - name: server
-        image: gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3
+        image: gcr.io/FIXME/adservice:v3
         ports:
         - containerPort: 9555
         env:
@@ -289,16 +332,20 @@ spec:
 
 adservice v3のためのDeploymentをデプロイする
 ```bash
-cd $HANDSON_WORKSPACE
 kubectl apply -f k8s-adservice-v3.yaml
 ```
+
+## Istioを使ったトラフィック制御
 
 ### Istioで利用するサービスエンドポイントを定義する
 
 トラフィックの向き先を定義したファイルを作成する。
 ```bash
 cd $HANDSON_WORKSPACE
-cat <<EOF > istio-destinationrule-adservice.yaml
+```
+
+以下の内容のファイルをistio-destinationrule-adservice.yamlという名前で作成する。
+```
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
@@ -315,19 +362,25 @@ spec:
   - name: v3
     labels:
       version: v3
-EOF
+```
+
+トラフィックの向き先定義(destination rule)をデプロイする。
+```bash
+kubectl apply -f istio-destinationrule-adservice.yaml
 ```
 
 トラフィックの向き先を定義の設定確認
 ```bash
-kubectl get destinationrule
 kubectl describe destinationrule/adservice
 ```
 
 トラフィックの配分を設定
-```
+```bash
 cd $HANDSON_WORKSPACE
-cat <<EOF > istio-virtualservice-adservice.yaml
+```
+
+以下の内容のファイルをistio-virtualservice-adservice.yamlという名前で作成する。
+```
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -345,16 +398,30 @@ spec:
         host: adservice
         subset: v3
       weight: 10
-EOF
+```
+
+トラフィックの配分定義(virtual service)をデプロイする。
+```bash
+kubectl apply -f istio-virtualservice-adservice.yaml
 ```
 
 トラフィックの配分を設定確認
 ```bash
-kubectl get virtualservices
 kubectl describe virtualservices/adservice
 ```
 
-ブラウザでサービスにアクセスして画面下部の広告が指定された割合(1:9)で表示されることを確認する
+ブラウザでサービスにアクセスして画面下部の広告が指定された割合(camera 9:airplant 1)で表示されることを確認する
 ```
 http://<EXTERNAL-IP>/product/9SIQT8TOJO
 ```
+
+
+# Congratulations !!
+
+<walkthrough-conclusion-trophy></walkthrough-conclusion-trophy>
+
+これにてkubernetesとistioを使ったマイクロサービスの開発と運用のハンズオンは終了です。
+
+より詳細はKubernetesおよびIstioの設定値などはこちらから確認ください。
+[Kubernetes](https://kubernetes.io)
+[Istio](https://istio.io)
