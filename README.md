@@ -1,7 +1,7 @@
 KubernetesとIstioを使ったマイクロサービス開発と運用のハンズオン
 ==
 
-GCPが公開している(マイクロサービスのデモアプリケーション))[https://github.com/GoogleCloudPlatform/microservices-demo]を利用し、KubernetesとIstioを利用したマイクロサービスの開発・運用を試すためのハンズオン。
+GCPが公開している[マイクロサービスのデモアプリケーション](https://github.com/GoogleCloudPlatform/microservices-demo)を利用し、KubernetesとIstioを利用したマイクロサービスの開発・運用を試すためのハンズオン。
 
 # 対象
 * Kubernetes、Istioをこれから利用しようと思っている人
