@@ -24,4 +24,4 @@ GCPの中にあるCloud Shellを利用して、インタラクティブにハン
 [![Open in Cloud Shell](http://gstatic.com/cloudssh/images/open-btn.svg)](https://console.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fsamuraitaiga%2Fk8s-istio-handson.git&cloudshell_open_in_editor=tutorial.md&cloudshell_tutorial=tutorial.md)
 
 ## ドキュメントを読みながら実行する
-[tutorial.md](https://github.com/samuraitaiga/k8s-istio-handson/tutorial.md)を参照し、独力でハンズオンを進める方法です。
+[tutorial.md](https://github.com/samuraitaiga/k8s-istio-handson/blob/master/tutorial.md)を参照し、独力でハンズオンを進める方法です。

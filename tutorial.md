@@ -12,6 +12,18 @@ gcloud projects list
 export GOOGLE_CLOUD_PROJECT=FIXME
 ```
 
+## GCPのデフォルトプロジェクトを設定する
+
+```bash
+gcloud config set project $GOOGLE_CLOUD_PROJECT
+```
+
+## ハンズオンで利用するディレクトリを環境変数に設定する
+
+```bash
+export HANDSON_WORKSPACE=`pwd`
+```
+
 ## ハンズオンで利用するGCPのAPIを有効化する
 
 ```bash
@@ -23,7 +35,7 @@ gcloud services enable cloudbuild.googleapis.com sourcerepo.googleapis.com conta
 Gitレポジトリより資材を取得し、動作確認ができている最新バージョン(2019/4/23時点のlatest)に切り替える
 
 ```bash
-cd ~
+cd $HANDSON_WORKSPACE
 git clone https://github.com/GoogleCloudPlatform/microservices-demo.git
 cd microservices-demo/
 git reset --hard f2f382f
@@ -32,7 +44,7 @@ git reset --hard f2f382f
 ## GKEクラスターの作成
 
 ```bash
-gcloud container clusters create "microservices-demo"  \
+gcloud beta container clusters create "microservices-demo"  \
 --zone "asia-northeast1-c" \
 --enable-autorepair \
 --username "admin" \
@@ -49,19 +61,25 @@ gcloud container clusters create "microservices-demo"  \
 --addons HorizontalPodAutoscaling,HttpLoadBalancing,Istio --istio-config auth=MTLS_PERMISSIVE
 ```
 
+## GKEクラスターへ接続するための認証情報取得
+
+```bash
+gcloud container clusters get-credentials microservices-demo --zone asia-northeast1-c --project $GOOGLE_CLOUD_PROJECT
+```
+
 # Kubernetesでのアプリケーション開発と運用
 
 ## コンテナの作成
 
 ```bash
-cd ~/microservices-demo
+cd $HANDSON_WORKSPACE/microservices-demo
 skaffold run -p gcb --default-repo=gcr.io/$GOOGLE_CLOUD_PROJECT
 ```
 
 ## サンプルサービス、Podの作成
 
 ```bash
-cd ~/microservices-demo
+cd $HANDSON_WORKSPACE/microservices-demo
 kubectl apply -f release/kubernetes-manifests.yaml
 ```
 
@@ -88,7 +106,7 @@ http://<EXTERNAL-IP>/product/9SIQT8TOJO
 
 対象ファイル
 ```
-~/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
+$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
 ```
 
 変更内容
@@ -100,7 +118,7 @@ http://<EXTERNAL-IP>/product/9SIQT8TOJO
 ### コンテナの作成、レジストリへの登録
 
 ```bash
-cd ~/microservices-demo/src/adservice/
+cd $HANDSON_WORKSPACE/microservices-demo/src/adservice/
 docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2 .
 docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2
 ```
@@ -147,7 +165,7 @@ kubectl delete --all pods
 
 対象ファイル
 ```
-~/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
+$HANDSON_WORKSPACE/microservices-demo/src/adservice/src/main/java/hipstarshop/AdService.java
 ```
 
 変更内容
@@ -159,15 +177,128 @@ kubectl delete --all pods
 ### コンテナの作成、レジストリへの登録
 
 ```bash
-cd ~/microservices-demo/src/adservice/
+cd $HANDSON_WORKSPACE/microservices-demo/src/adservice/
 docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3 .
 docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3
 ```
 
+### Istioで管理するための情報を追加したDeployementをデプロイする
+
+adservice v2のためのDeploymentを作成する
+```bash
+cd $HANDSON_WORKSPACE
+cat <<EOF > k8s-adservice-v2.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+        version: v2
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2
+        ports:
+        - containerPort: 9555
+        env:
+        - name: PORT
+          value: "9555"
+        #- name: JAEGER_SERVICE_ADDR
+        #  value: "jaeger-collector:14268"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 180Mi
+          limits:
+            cpu: 300m
+            memory: 300Mi
+        readinessProbe:
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+        livenessProbe:
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+EOF
+```
+
+adservice v2のためのDeploymentをデプロイする
+```bash
+cd $HANDSON_WORKSPACE
+kubectl apply -f k8s-adservice-v2.yaml
+```
+
+adservice v3のためのDeploymentを作成する
+```bash
+cd $HANDSON_WORKSPACE
+cat <<EOF > k8s-adservice-v3.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adservice
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+  template:
+    metadata:
+      labels:
+        app: adservice
+        version: v3
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v3
+        ports:
+        - containerPort: 9555
+        env:
+        - name: PORT
+          value: "9555"
+        #- name: JAEGER_SERVICE_ADDR
+        #  value: "jaeger-collector:14268"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 180Mi
+          limits:
+            cpu: 300m
+            memory: 300Mi
+        readinessProbe:
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+        livenessProbe:
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          exec:
+            command: ["/bin/grpc_health_probe", "-addr=:9555"]
+```
+
+adservice v3のためのDeploymentをデプロイする
+```bash
+cd $HANDSON_WORKSPACE
+kubectl apply -f k8s-adservice-v3.yaml
+```
+
 ### Istioで利用するサービスエンドポイントを定義する
 
-トラフィックの向き先を定義
-```
+トラフィックの向き先を定義したファイルを作成する。
+```bash
+cd $HANDSON_WORKSPACE
+cat <<EOF > istio-destinationrule-adservice.yaml
 apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
@@ -184,6 +315,7 @@ spec:
   - name: v3
     labels:
       version: v3
+EOF
 ```
 
 トラフィックの向き先を定義の設定確認
@@ -194,6 +326,8 @@ kubectl describe destinationrule/adservice
 
 トラフィックの配分を設定
 ```
+cd $HANDSON_WORKSPACE
+cat <<EOF > istio-virtualservice-adservice.yaml
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
@@ -211,6 +345,7 @@ spec:
         host: adservice
         subset: v3
       weight: 10
+EOF
 ```
 
 トラフィックの配分を設定確認
@@ -219,7 +354,7 @@ kubectl get virtualservices
 kubectl describe virtualservices/adservice
 ```
 
-ブラウザでサービスにアクセスして画面下部の広告が指定された割合で表示されることを確認する
+ブラウザでサービスにアクセスして画面下部の広告が指定された割合(1:9)で表示されることを確認する
 ```
 http://<EXTERNAL-IP>/product/9SIQT8TOJO
 ```
