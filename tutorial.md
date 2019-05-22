@@ -425,3 +425,16 @@ http://<EXTERNAL-IP>/product/9SIQT8TOJO
 より詳細はKubernetesおよびIstioの設定値などはこちらから確認ください。
 [Kubernetes](https://kubernetes.io)
 [Istio](https://istio.io)
+
+## (任意) クリーンアップ
+以下は任意ですが、必要に応じてハンズオンで利用したリソースを削除してください。
+
+### GKEクラスターの削除
+```bash
+gcloud container clusters delete microservices-demo --zone=asia-northeast1-c
+```
+
+### CloudShellのデフォルトプロジェクト削除
+```bash
+gcloud config unset project
+```
