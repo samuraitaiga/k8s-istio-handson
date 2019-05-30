@@ -137,6 +137,11 @@ cd $HANDSON_WORKSPACE/microservices-demo/src/adservice/
 docker build -t gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2 .
 ```
 
+Docker Credential Helperの設置
+```bash
+gcloud --quiet beta auth configure-docker
+```
+
 コンテナをレジストリへ登録する
 ```bash
 docker push gcr.io/$GOOGLE_CLOUD_PROJECT/adservice:v2
